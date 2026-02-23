@@ -139,7 +139,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the app.
 **Manas Sharma**
 
 - GitHub: [@manas467](https://github.com/manas467)
-- LinkedIn: [linkedin.com/in/manas-sharma](https://linkedin.com/in/manas-sharma)
+- LinkedIn: [linkedin.com/in/manas-sharma](https://www.linkedin.com/in/manas-sharma-324984199/)
 
 ---
 
