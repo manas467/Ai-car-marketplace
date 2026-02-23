@@ -170,6 +170,8 @@ export async function addCar({ carData, images }) {
     if (imageUrls.length === 0) {
       throw new Error("No valid images were uploaded");
     }
+    console.log("Price from carData:", carData.price);
+console.log("Parsed price:", parseFloat(String(carData.price).replace(/[^0-9.]/g, "")) || 0);
      
     // Add the car to the database
     const car = await db.car.create({
@@ -178,7 +180,7 @@ export async function addCar({ carData, images }) {
         make: carData.make,
         model: carData.model,
         year: carData.year,
-        price: parseFloat(String(carData.price).replace(/[^0-9.]/g, "")) || 0,
+        price:  parseFloat(String(carData.price).replace(/[^0-9.,\-\s]/g, "").split(/[-–,\s]/)[0].replace(/,/g, "")) || 0,
         mileage: carData.mileage,
         color: carData.color,
         fuelType: carData.fuelType,
@@ -258,14 +260,25 @@ export async function deleteCar(id) {
       };
     }
 
-    // Delete the car from the database
-    await db.car.delete({
-      where: { id },
-    });
+
+   // Delete related test drive bookings first
+await db.testDriveBooking.deleteMany({
+  where: { carId: id },
+});
+
+// Delete related saved cars
+await db.userSavedCar.deleteMany({
+  where: { carId: id },
+});
+
+// Delete the car from the database
+await db.car.delete({
+  where: { id },
+});
 
     // Delete the images from Supabase storage
     try {
-      const cookieStore = cookies();
+      const cookieStore =  await cookies();
       const supabase = createClient(cookieStore);
 
       // Extract file paths from image URLs
