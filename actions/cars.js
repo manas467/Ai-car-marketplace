@@ -8,6 +8,7 @@ import { db } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase";
 import { auth } from "@clerk/nextjs/server";
 import { serializeCarData } from "@/lib/helpers";
+import Groq from "groq-sdk";
 
 // Function to convert File to base64
 async function fileToBase64(file) {
@@ -19,82 +20,72 @@ async function fileToBase64(file) {
 // Gemini AI integration for car image processing
 export async function processCarImageWithAI(file) {
   try {
-    // Check if API key is available
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("Gemini API key is not configured");
+    if (!process.env.GROQ_API_KEY) {
+      throw new Error("Groq API key is not configured");
     }
 
-    // Initialize Gemini API
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-    // Convert image file to base64
     const base64Image = await fileToBase64(file);
 
-    // Create image part for the model
-    const imagePart = {
-      inlineData: {
-        data: base64Image,
-        mimeType: file.type,
-      },
-    };
+    const response = await groq.chat.completions.create({
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${file.type};base64,${base64Image}`,
+              },
+            },
+            {
+              type: "text",
+              text: `Analyze this car image and extract the following information:
+              1. Make (manufacturer)
+              2. Model
+              3. Year (approximately)
+              4. Color
+              5. Body type (SUV, Sedan, Hatchback, etc.)
+              6. Mileage
+              7. Fuel type (your best guess)
+              8. Transmission type (your best guess)
+              9. Price (your best guess)
+              10. Short Description as to be added to a car listing
 
-    // Define the prompt for car detail extraction
-    const prompt = `
-      Analyze this car image and extract the following information:
-      1. Make (manufacturer)
-      2. Model
-      3. Year (approximately)
-      4. Color
-      5. Body type (SUV, Sedan, Hatchback, etc.)
-      6. Mileage
-      7. Fuel type (your best guess)
-      8. Transmission type (your best guess)
-      9. Price (your best guess)
-      9. Short Description as to be added to a car listing
+              Format your response as a clean JSON object with these fields:
+              {
+                "make": "",
+                "model": "",
+                "year": 0000,
+                "color": "",
+                "price": "",
+                "mileage": "",
+                "bodyType": "",
+                "fuelType": "",
+                "transmission": "",
+                "description": "",
+                "confidence": 0.0
+              }
+              Only respond with the JSON object, nothing else.`,
+            },
+          ],
+        },
+      ],
+      max_tokens: 1024,
+    });
 
-      Format your response as a clean JSON object with these fields:
-      {
-        "make": "",
-        "model": "",
-        "year": 0000,
-        "color": "",
-        "price": "",
-        "mileage": "",
-        "bodyType": "",
-        "fuelType": "",
-        "transmission": "",
-        "description": "",
-        "confidence": 0.0
-      }
-
-      For confidence, provide a value between 0 and 1 representing how confident you are in your overall identification.
-      Only respond with the JSON object, nothing else.
-    `;
-
-    // Get response from Gemini
-    const result = await model.generateContent([imagePart, prompt]);
-    const response = await result.response;
-    const text = response.text();
+    const text = response.choices[0]?.message?.content || "";
     const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
 
-    // Parse the JSON response
     try {
       const carDetails = JSON.parse(cleanedText);
 
-      // Validate the response format
       const requiredFields = [
-        "make",
-        "model",
-        "year",
-        "color",
-        "bodyType",
-        "price",
-        "mileage",
-        "fuelType",
-        "transmission",
-        "description",
-        "confidence",
+        "make", "model", "year", "color", "bodyType",
+        "price", "mileage", "fuelType", "transmission",
+        "description", "confidence",
       ];
 
       const missingFields = requiredFields.filter(
@@ -102,30 +93,18 @@ export async function processCarImageWithAI(file) {
       );
 
       if (missingFields.length > 0) {
-        throw new Error(
-          `AI response missing required fields: ${missingFields.join(", ")}`
-        );
+        throw new Error(`AI response missing required fields: ${missingFields.join(", ")}`);
       }
 
-      // Return success response with data
-      return {
-        success: true,
-        data: carDetails,
-      };
+      return { success: true, data: carDetails };
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
-      console.log("Raw response:", text);
-      return {
-        success: false,
-        error: "Failed to parse AI response",
-      };
+      return { success: false, error: "Failed to parse AI response" };
     }
   } catch (error) {
-    console.error();
-    throw new Error("Gemini API error:" + error.message);
+    throw new Error("Groq API error:" + error.message);
   }
 }
-
 // Add a car to the database with images
 export async function addCar({ carData, images }) {
   try {
@@ -191,7 +170,7 @@ export async function addCar({ carData, images }) {
     if (imageUrls.length === 0) {
       throw new Error("No valid images were uploaded");
     }
-
+     
     // Add the car to the database
     const car = await db.car.create({
       data: {
@@ -199,7 +178,7 @@ export async function addCar({ carData, images }) {
         make: carData.make,
         model: carData.model,
         year: carData.year,
-        price: carData.price,
+        price: parseFloat(String(carData.price).replace(/[^0-9.]/g, "")) || 0,
         mileage: carData.mileage,
         color: carData.color,
         fuelType: carData.fuelType,

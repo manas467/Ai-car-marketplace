@@ -18,7 +18,6 @@ export const CarCard = ({ car }) => {
   const router = useRouter();
   const [isSaved, setIsSaved] = useState(car.wishlisted);
 
-  // Use the useFetch hook
   const {
     loading: isToggling,
     fn: toggleSavedCarFn,
@@ -26,7 +25,6 @@ export const CarCard = ({ car }) => {
     error: toggleError,
   } = useFetch(toggleSavedCar);
 
-  // Handle toggle result with useEffect
   useEffect(() => {
     if (toggleResult?.success && toggleResult.saved !== isSaved) {
       setIsSaved(toggleResult.saved);
@@ -34,14 +32,12 @@ export const CarCard = ({ car }) => {
     }
   }, [toggleResult, isSaved]);
 
-  // Handle errors with useEffect
   useEffect(() => {
     if (toggleError) {
       toast.error("Failed to update favorites");
     }
   }, [toggleError]);
 
-  // Handle save/unsave car
   const handleToggleSave = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -54,7 +50,6 @@ export const CarCard = ({ car }) => {
 
     if (isToggling) return;
 
-    // Call the toggleSavedCar function using our useFetch hook
     await toggleSavedCarFn(car.id);
   };
 
@@ -101,7 +96,7 @@ export const CarCard = ({ car }) => {
             {car.make} {car.model}
           </h3>
           <span className="text-xl font-bold text-blue-600">
-            ${car.price.toLocaleString()}
+            ${new Intl.NumberFormat("en-US").format(car.price)}
           </span>
         </div>
 
@@ -118,7 +113,7 @@ export const CarCard = ({ car }) => {
             {car.bodyType}
           </Badge>
           <Badge variant="outline" className="bg-gray-50">
-            {car.mileage.toLocaleString()} miles
+            {new Intl.NumberFormat("en-US").format(car.mileage)} miles
           </Badge>
           <Badge variant="outline" className="bg-gray-50">
             {car.color}
